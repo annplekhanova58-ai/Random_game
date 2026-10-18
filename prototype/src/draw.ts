@@ -23,12 +23,20 @@ function toCents(value: number): number {
 }
 
 /**
- * A ceiling of exactly 0 is the review control for the empty catalog.
- * The free game stays in the mock and can be drawn at any higher ceiling.
+ * Free games (priceUsd === 0) stay eligible whenever the ceiling covers them, including 0.
+ * When freeOnly is set, the ceiling is ignored and only those free games remain.
+ * History still excludes a game either way.
  */
-export function eligibleGames(games: SteamGame[], history: RollRecord[], maxPrice: number): SteamGame[] {
-  if (toCents(maxPrice) === 0) return [];
+export function eligibleGames(
+  games: SteamGame[],
+  history: RollRecord[],
+  maxPrice: number,
+  freeOnly = false,
+): SteamGame[] {
   const seen = new Set(history.map((roll) => roll.appId));
+  if (freeOnly) {
+    return games.filter((game) => game.priceUsd === 0 && !seen.has(game.appId));
+  }
   const ceiling = toCents(maxPrice);
   return games.filter((game) => toCents(game.priceUsd) <= ceiling && !seen.has(game.appId));
 }

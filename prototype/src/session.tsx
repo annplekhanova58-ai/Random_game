@@ -5,6 +5,7 @@ import { t, type Lang } from './i18n';
 
 const LANG_KEY = 'rsg-lang';
 const PRICE_KEY = 'rsg-max-price';
+const FREE_ONLY_KEY = 'rsg-free-only';
 
 function readLang(): Lang {
   try {
@@ -28,6 +29,15 @@ function readPrice(): number {
   return 20;
 }
 
+function readFreeOnly(): boolean {
+  try {
+    return localStorage.getItem(FREE_ONLY_KEY) === '1';
+  } catch {
+    /* storage unavailable */
+  }
+  return false;
+}
+
 function writeStorage(key: string, value: string) {
   try {
     localStorage.setItem(key, value);
@@ -41,6 +51,8 @@ interface SessionValue {
   setLang: (lang: Lang) => void;
   savedPrice: number;
   setSavedPrice: (price: number) => void;
+  freeOnly: boolean;
+  setFreeOnly: (freeOnly: boolean) => void;
   history: RollRecord[];
   currentRoll: RollRecord | null;
   spinning: boolean;
@@ -55,6 +67,7 @@ const SessionContext = createContext<SessionValue | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(readLang);
   const [savedPrice, setSavedPriceState] = useState<number>(readPrice);
+  const [freeOnly, setFreeOnlyState] = useState<boolean>(readFreeOnly);
   const [history, setHistory] = useState<RollRecord[]>(seedHistory);
   const [currentRoll, setCurrentRoll] = useState<RollRecord | null>(null);
   const [spinning, setSpinning] = useState(false);
@@ -67,6 +80,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const setSavedPrice = useCallback((price: number) => {
     setSavedPriceState(price);
     writeStorage(PRICE_KEY, String(price));
+  }, []);
+
+  const setFreeOnly = useCallback((next: boolean) => {
+    setFreeOnlyState(next);
+    writeStorage(FREE_ONLY_KEY, next ? '1' : '0');
   }, []);
 
   const commitRoll = useCallback((roll: RollRecord) => {
@@ -93,6 +111,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setLang,
       savedPrice,
       setSavedPrice,
+      freeOnly,
+      setFreeOnly,
       history,
       currentRoll,
       spinning,
@@ -106,6 +126,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setLang,
       savedPrice,
       setSavedPrice,
+      freeOnly,
+      setFreeOnly,
       history,
       currentRoll,
       spinning,

@@ -23,8 +23,18 @@ const SPIN_MS = 2600;
 
 export function RoulettePage() {
   const navigate = useNavigate();
-  const { lang, savedPrice, setSavedPrice, history, currentRoll, spinning, setSpinning, commitRoll } =
-    useSession();
+  const {
+    lang,
+    savedPrice,
+    setSavedPrice,
+    freeOnly,
+    setFreeOnly,
+    history,
+    currentRoll,
+    spinning,
+    setSpinning,
+    commitRoll,
+  } = useSession();
 
   const resting = useMemo(() => [...catalog, ...catalog, ...catalog], []);
   const [priceInput, setPriceInput] = useState(() => String(savedPrice));
@@ -113,15 +123,23 @@ export function RoulettePage() {
   function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (spinning || phaseRef.current === 'spinning') return;
-    const price = parseUsd(priceInput);
-    if (price == null) {
-      setFieldError(true);
-      setEmptyCatalog(false);
-      return;
+
+    let pool;
+    if (freeOnly) {
+      setFieldError(false);
+      pool = eligibleGames(catalog, history, 0, true);
+    } else {
+      const price = parseUsd(priceInput);
+      if (price == null) {
+        setFieldError(true);
+        setEmptyCatalog(false);
+        return;
+      }
+      setFieldError(false);
+      setSavedPrice(price);
+      pool = eligibleGames(catalog, history, price, false);
     }
-    setFieldError(false);
-    setSavedPrice(price);
-    const pool = eligibleGames(catalog, history, price);
+
     if (pool.length === 0) {
       setEmptyCatalog(true);
       setSteamError(false);
@@ -144,32 +162,64 @@ export function RoulettePage() {
       <h1 className="text-2xl font-semibold text-white">{t(lang, 'roulette')}</h1>
       <p className="mt-1 text-sm text-[#8f98a0]">{t(lang, 'rouletteLead')}</p>
 
-      <form onSubmit={onSubmit} className="mt-5 flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1.5 text-sm text-[#c7d5e0]" htmlFor="max-price">
-          {t(lang, 'maxPrice')}
-          <input
-            id="max-price"
-            name="maxPrice"
-            type="text"
-            inputMode="decimal"
-            autoComplete="off"
-            spellCheck={false}
-            value={priceInput}
-            disabled={spinning}
-            aria-invalid={fieldError}
-            aria-describedby={fieldError ? 'price-error' : undefined}
-            onChange={(event) => {
-              setPriceInput(event.target.value);
-              setFieldError(false);
-            }}
-            className={`w-44 rounded border bg-[#0e1419] px-3 py-2 text-base text-white outline-none focus:border-[#66c0f4] disabled:opacity-50 ${
-              fieldError ? 'border-[#e06c75]' : 'border-[#2a475e]'
-            }`}
-          />
+      <form onSubmit={onSubmit} className="mt-5">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1.5 text-sm text-[#c7d5e0]" htmlFor="max-price">
+            {t(lang, 'maxPrice')}
+            <input
+              id="max-price"
+              name="maxPrice"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              spellCheck={false}
+              value={priceInput}
+              disabled={spinning || freeOnly}
+              aria-invalid={fieldError}
+              aria-describedby={fieldError ? 'price-error' : undefined}
+              onChange={(event) => {
+                setPriceInput(event.target.value);
+                setFieldError(false);
+              }}
+              className={`w-44 rounded border bg-[#0e1419] px-3 py-2 text-base text-white outline-none focus:border-[#66c0f4] disabled:cursor-not-allowed disabled:opacity-50 ${
+                fieldError ? 'border-[#e06c75]' : 'border-[#2a475e]'
+              }`}
+            />
+          </label>
+          <button type="submit" className={primaryBtn} disabled={spinning}>
+            {phase === 'landed' ? t(lang, 'landed') : spinning ? t(lang, 'spinning') : t(lang, 'draw')}
+          </button>
+        </div>
+        <label
+          className={`mt-3 inline-flex items-center gap-2.5 text-sm text-[#c7d5e0] ${
+            spinning ? 'cursor-not-allowed' : 'cursor-pointer'
+          }`}
+        >
+          <span className="relative inline-flex h-6 w-11 shrink-0">
+            <input
+              id="free-only"
+              type="checkbox"
+              role="switch"
+              checked={freeOnly}
+              disabled={spinning}
+              onChange={(event) => {
+                setFreeOnly(event.target.checked);
+                setFieldError(false);
+                setEmptyCatalog(false);
+              }}
+              className="peer sr-only"
+            />
+            <span
+              aria-hidden="true"
+              className="h-6 w-11 rounded-full bg-[#2a475e] transition-colors peer-checked:bg-[#5c7e10] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[#66c0f4] peer-disabled:opacity-40"
+            />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5 peer-disabled:opacity-40"
+            />
+          </span>
+          {t(lang, 'freeOnly')}
         </label>
-        <button type="submit" className={primaryBtn} disabled={spinning}>
-          {phase === 'landed' ? t(lang, 'landed') : spinning ? t(lang, 'spinning') : t(lang, 'draw')}
-        </button>
       </form>
       {fieldError ? (
         <p id="price-error" className="mt-2 text-sm text-[#ff8b8b]">
@@ -179,7 +229,9 @@ export function RoulettePage() {
 
       {emptyCatalog ? (
         <div role="status" className="mt-4 rounded border border-[#4c6b22] bg-[#1c2814] px-4 py-3">
-          <p className="text-sm leading-relaxed text-[#d7e8b8]">{t(lang, 'emptyCatalog')}</p>
+          <p className="text-sm leading-relaxed text-[#d7e8b8]">
+            {t(lang, freeOnly ? 'emptyFreeCatalog' : 'emptyCatalog')}
+          </p>
           <Link to="/history" className="mt-2 inline-block text-sm text-[#66c0f4] underline">
             {t(lang, 'openHistory')}
           </Link>

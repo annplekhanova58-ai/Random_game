@@ -6,10 +6,13 @@ const ru = {
   language: 'Язык',
   rouletteLead: 'Одна уже вышедшая игра не дороже заданной цены.',
   maxPrice: 'Максимальная цена, USD',
+  freeOnly: 'Только бесплатные',
   draw: 'Разыграть',
   priceError: 'Введите неотрицательную цену в USD.',
   emptyCatalog:
     'Не осталось уже вышедшей игры в пределах цены, которой ещё нет в истории. Поднимите границу или откройте историю.',
+  emptyFreeCatalog:
+    'Не осталось бесплатной игры, которой ещё нет в истории. Выключите «Только бесплатные» или откройте историю.',
   openHistory: 'Открыть историю',
   steamError: 'Витрина Steam недоступна.',
   retry: 'Повторить',
@@ -45,10 +48,13 @@ const en: { [K in MessageKey]: string } = {
   language: 'Language',
   rouletteLead: 'One released game at or below your price.',
   maxPrice: 'Maximum price, USD',
+  freeOnly: 'Free only',
   draw: 'Draw',
   priceError: 'Enter a non-negative price in USD.',
   emptyCatalog:
     'No released game within this price is left outside history. Raise the limit or open history.',
+  emptyFreeCatalog:
+    'No free game is left outside history. Turn off Free only or open history.',
   openHistory: 'Open history',
   steamError: 'The Steam storefront is unavailable.',
   retry: 'Retry',
