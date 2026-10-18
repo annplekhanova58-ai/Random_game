@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+body {
+  @apply m-0 bg-[#0e1419] text-[#c7d5e0] antialiased;
+  font-family: "Segoe UI", "DejaVu Sans", "Liberation Sans", Arial, sans-serif;
+}
