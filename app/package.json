@@ -10,7 +10,8 @@
     "dev": "vite --host 127.0.0.1 --port 43128 --strictPort",
     "build": "tsc --noEmit && vite build",
     "desktop": "tauri dev",
-    "desktop:build": "tauri build --bundles deb"
+    "desktop:build": "tauri build --bundles deb",
+    "desktop:build:windows": "tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.1",
