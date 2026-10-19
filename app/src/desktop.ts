@@ -168,12 +168,15 @@ async function searchPage(start: number, freeOnly: boolean, maxPriceUsd: number 
 export async function previewStorefront(input: {
   freeOnly: boolean;
   maxPriceUsd: number | null;
-}): Promise<SteamGame[]> {
+}): Promise<{ games: SteamGame[]; totalCount: number } | null> {
   try {
     const page = await searchPage(0, input.freeOnly, input.maxPriceUsd);
-    return page.hits.filter((hit) => hitPriceOk(hit, input.freeOnly, input.maxPriceUsd)).map(hitToGame);
+    return {
+      games: page.hits.filter((hit) => hitPriceOk(hit, input.freeOnly, input.maxPriceUsd)).map(hitToGame),
+      totalCount: page.totalCount,
+    };
   } catch {
-    return [];
+    return null;
   }
 }
 

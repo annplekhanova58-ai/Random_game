@@ -16,7 +16,7 @@ import {
   parseUsd,
   pickGame,
 } from '../draw';
-import { t } from '../i18n';
+import { formatPoolCount, t } from '../i18n';
 import { useSession } from '../session';
 import { primaryBtn } from '../ui';
 
@@ -45,6 +45,8 @@ export function RoulettePage() {
   const [steamError, setSteamError] = useState(false);
   const [phase, setPhase] = useState<'idle' | 'spinning' | 'landed'>('idle');
   const [preview, setPreview] = useState<SteamGame[]>([]);
+  const [poolCount, setPoolCount] = useState<number | null>(null);
+  const [poolStatus, setPoolStatus] = useState<'loading' | 'ready' | 'error' | 'invalid'>('loading');
   const [strip, setStrip] = useState<SteamGame[]>(() => (isDesktop() ? [] : [...catalog, ...catalog, ...catalog]));
   const [offset, setOffset] = useState(() => cardOffset(3, 1100));
   const [animate, setAnimate] = useState(false);
@@ -69,11 +71,25 @@ export function RoulettePage() {
   useEffect(() => {
     if (!isDesktop() || !ready) return;
     const price = freeOnly ? null : parseUsd(priceInput);
-    if (!freeOnly && price == null) return;
+    if (!freeOnly && price == null) {
+      setPoolCount(null);
+      setPoolStatus('invalid');
+      return;
+    }
+    setPoolStatus('loading');
     let cancel = false;
     const timer = window.setTimeout(() => {
-      void previewStorefront({ freeOnly, maxPriceUsd: price }).then((games) => {
-        if (!cancel) setPreview(games);
+      void previewStorefront({ freeOnly, maxPriceUsd: price }).then((page) => {
+        if (cancel) return;
+        if (!page) {
+          setPreview([]);
+          setPoolCount(null);
+          setPoolStatus('error');
+          return;
+        }
+        setPreview(page.games);
+        setPoolCount(page.totalCount);
+        setPoolStatus('ready');
       });
     }, 350);
     return () => {
@@ -210,7 +226,16 @@ export function RoulettePage() {
     startSpin(pool, winner);
   }
 
+  const prototypeCount = useMemo(() => {
+    if (isDesktop()) return null;
+    if (freeOnly) return eligibleGames(catalog, history, 0, true).length;
+    const price = parseUsd(priceInput);
+    if (price == null) return null;
+    return eligibleGames(catalog, history, price, false).length;
+  }, [freeOnly, history, priceInput]);
+
   const shown = phase === 'idle' ? (isDesktop() ? preview : resting) : strip;
+  const visibleCount = isDesktop() ? poolCount : prototypeCount;
 
   return (
     <div>
@@ -275,6 +300,11 @@ export function RoulettePage() {
           </span>
           {t(lang, 'freeOnly')}
         </label>
+        <p className="mt-3 text-sm text-[#c7d5e0]" aria-live="polite">
+          {isDesktop() && poolStatus === 'loading' ? t(lang, 'poolCountLoading') : null}
+          {isDesktop() && poolStatus === 'error' ? t(lang, 'poolCountError') : null}
+          {visibleCount != null ? formatPoolCount(visibleCount, lang) : null}
+        </p>
       </form>
       {fieldError ? (
         <p id="price-error" className="mt-2 text-sm text-[#ff8b8b]">

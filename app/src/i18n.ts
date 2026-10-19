@@ -7,7 +7,10 @@ const ru = {
   rouletteLead: 'Одна уже вышедшая игра не дороже заданной цены.',
   maxPrice: 'Максимальная цена, USD',
   freeOnly: 'Только бесплатные',
-  draw: 'Разыграть',
+  draw: 'Крутить',
+  poolCount: 'В розыгрыше {count} {word}',
+  poolCountLoading: 'Считаю игры в розыгрыше…',
+  poolCountError: 'Не удалось узнать количество игр в магазине Steam.',
   priceError: 'Введите неотрицательную цену в USD.',
   emptyCatalog:
     'Не осталось уже вышедшей игры в пределах цены, которой ещё нет в истории. Поднимите границу или откройте историю.',
@@ -50,7 +53,10 @@ const en: { [K in MessageKey]: string } = {
   rouletteLead: 'One released game at or below your price.',
   maxPrice: 'Maximum price, USD',
   freeOnly: 'Free only',
-  draw: 'Draw',
+  draw: 'Spin',
+  poolCount: '{count} {word} in this draw',
+  poolCountLoading: 'Counting games in this draw…',
+  poolCountError: 'Could not read the Steam store game count.',
   priceError: 'Enter a non-negative price in USD.',
   emptyCatalog:
     'No released game within this price is left outside history. Raise the limit or open history.',
@@ -105,4 +111,18 @@ export function formatWhen(iso: string, lang: Lang): string {
 
 export function localizedNote(noteRu: string, noteEn: string, lang: Lang): string {
   return lang === 'en' ? noteEn : noteRu;
+}
+
+export function formatPoolCount(count: number, lang: Lang): string {
+  const formatted = new Intl.NumberFormat(lang === 'en' ? 'en-US' : 'ru-RU').format(count);
+  const word = lang === 'en' ? (count === 1 ? 'game' : 'games') : ruGameWord(count);
+  return t(lang, 'poolCount').replace('{count}', formatted).replace('{word}', word);
+}
+
+function ruGameWord(count: number): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'игра';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'игры';
+  return 'игр';
 }
