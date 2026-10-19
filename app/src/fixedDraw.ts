@@ -24,10 +24,6 @@ export function isFixedWinner(): boolean {
   return import.meta.env.VITE_FIXED_WINNER === String(FIXED_APP_ID);
 }
 
-export function fixedAppTitle(): string | null {
-  return isFixedWinner() ? FIXED_NAME : null;
-}
-
 function capsule(appId: number, name: string, initials: string): SteamGame {
   return {
     appId,
@@ -54,9 +50,8 @@ function resultCard(): SteamGame {
   };
 }
 
-/** Idle strip and the moving roulette. The landing card is the bundled capsule. */
-export function fixedPreview(): SteamGame[] {
-  return [capsule(FIXED_APP_ID, FIXED_NAME, 'BP'), ...FILLERS.map((item) => capsule(item.appId, item.name, item.initials))];
+function fallbackNeighbors(): SteamGame[] {
+  return FILLERS.map((item) => capsule(item.appId, item.name, item.initials));
 }
 
 interface SavedRoll {
@@ -85,13 +80,15 @@ function rollFromSaved(saved: SavedRoll, card: SteamGame): RollRecord {
 }
 
 /**
- * Always returns Book Of Potentia 2. Price, the free-only switch, and history do not reject it.
+ * The rest of the draw stays on the storefront strip. The card that stops in the marker is always Book Of Potentia 2.
  * A duplicate history row still shows the card.
  */
-export async function drawFixedWinner(): Promise<Extract<DrawOutcome, { kind: 'card' }>> {
+export async function drawFixedWinner(neighbors: SteamGame[] = []): Promise<Extract<DrawOutcome, { kind: 'card' }>> {
   const card = resultCard();
   const winner = capsule(FIXED_APP_ID, FIXED_NAME, 'BP');
-  const strip = fixedPreview();
+  const strip = neighbors.some((game) => game.appId !== FIXED_APP_ID && game.cover)
+    ? neighbors.filter((game) => game.appId !== FIXED_APP_ID)
+    : fallbackNeighbors();
   if (isDesktop()) {
     try {
       const saved = await invoke<SavedRoll>('history_add', {
