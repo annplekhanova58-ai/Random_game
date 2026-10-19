@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 import { seedHistory, type RollRecord } from './data/mock';
 import { isDesktop, loadDesktop, removeHistory, saveSettings, wipeHistory } from './desktop';
+import { fixedAppTitle } from './fixedDraw';
 import { t, type Lang } from './i18n';
 
 const LANG_KEY = 'rsg-lang';
@@ -131,7 +132,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.lang = lang;
-    document.title = t(lang, 'productName');
+    document.title = fixedAppTitle() ?? t(lang, 'productName');
   }, [lang]);
 
   const value = useMemo<SessionValue>(

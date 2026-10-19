@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { GameCover } from '../components/GameCover';
 import { catalog, createRoll, type RollRecord, type SteamGame } from '../data/mock';
 import { drawFromSteam, isDesktop, previewStorefront } from '../desktop';
+import { drawFixedWinner, fixedPreview, isFixedWinner } from '../fixedDraw';
 import {
   CARD_GAP,
   CARD_H,
@@ -79,16 +80,21 @@ export function RoulettePage() {
     ready,
   } = useSession();
 
+  const fixed = isFixedWinner();
   const resting = useMemo(() => [...catalog, ...catalog, ...catalog], []);
   const [priceInput, setPriceInput] = useState(() => String(savedPrice));
   const [fieldError, setFieldError] = useState(false);
   const [emptyCatalog, setEmptyCatalog] = useState(false);
   const [steamError, setSteamError] = useState(false);
   const [phase, setPhase] = useState<'idle' | 'spinning' | 'landed'>('idle');
-  const [preview, setPreview] = useState<SteamGame[]>([]);
-  const [poolCount, setPoolCount] = useState<number | null>(null);
-  const [poolStatus, setPoolStatus] = useState<'loading' | 'ready' | 'error' | 'invalid'>('loading');
-  const [strip, setStrip] = useState<SteamGame[]>(() => (isDesktop() ? [] : [...catalog, ...catalog, ...catalog]));
+  const [preview, setPreview] = useState<SteamGame[]>(() => (fixed ? fixedPreview() : []));
+  const [poolCount, setPoolCount] = useState<number | null>(() => (fixed ? 1 : null));
+  const [poolStatus, setPoolStatus] = useState<'loading' | 'ready' | 'error' | 'invalid'>(() =>
+    fixed ? 'ready' : 'loading',
+  );
+  const [strip, setStrip] = useState<SteamGame[]>(() =>
+    fixed ? fixedPreview() : isDesktop() ? [] : [...catalog, ...catalog, ...catalog],
+  );
   const [offset, setOffset] = useState(() => cardOffset(3, 1100));
   const [animate, setAnimate] = useState(false);
 
@@ -109,6 +115,12 @@ export function RoulettePage() {
   }, []);
 
   useEffect(() => {
+    if (fixed) {
+      setPreview(fixedPreview());
+      setPoolCount(1);
+      setPoolStatus('ready');
+      return;
+    }
     if (!isDesktop() || !ready) return;
     const price = freeOnly ? null : parseUsd(priceInput);
     if (!freeOnly && price == null) {
@@ -136,7 +148,7 @@ export function RoulettePage() {
       cancel = true;
       window.clearTimeout(timer);
     };
-  }, [ready, freeOnly, priceInput]);
+  }, [fixed, ready, freeOnly, priceInput]);
 
   useLayoutEffect(() => {
     const node = viewportRef.current;
@@ -202,6 +214,17 @@ export function RoulettePage() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (spinning || phaseRef.current === 'spinning' || !ready) return;
+
+    if (fixed) {
+      setFieldError(false);
+      setEmptyCatalog(false);
+      setSteamError(false);
+      setSpinning(true);
+      const outcome = await drawFixedWinner();
+      if (!mountedRef.current) return;
+      void startSpin(outcome.strip, outcome.winner, outcome.roll);
+      return;
+    }
 
     if (isDesktop()) {
       if (!freeOnly) {
@@ -278,16 +301,17 @@ export function RoulettePage() {
     return eligibleGames(catalog, history, price, false).length;
   }, [freeOnly, history, priceInput]);
 
-  const shown = phase === 'idle' ? (isDesktop() ? preview : resting) : strip;
-  const visibleCount = isDesktop() ? poolCount : prototypeCount;
+  const shown = phase === 'idle' ? (isDesktop() || fixed ? preview : resting) : strip;
+  const visibleCount = fixed ? 1 : isDesktop() ? poolCount : prototypeCount;
 
   return (
-    <div>
+    <div data-fixed-winner={fixed ? '665740' : undefined}>
       <h1 className="text-2xl font-semibold text-white">{t(lang, 'roulette')}</h1>
-      <p className="mt-1 text-sm text-[#8f98a0]">{t(lang, 'rouletteLead')}</p>
+      <p className="mt-1 text-sm text-[#8f98a0]">{t(lang, fixed ? 'fixedLead' : 'rouletteLead')}</p>
 
       <form onSubmit={onSubmit} className="mt-5">
         <div className="flex flex-wrap items-end gap-3">
+          {fixed ? null : (
           <label className="flex flex-col gap-1.5 text-sm text-[#c7d5e0]" htmlFor="max-price">
             {t(lang, 'maxPrice')}
             <input
@@ -310,10 +334,12 @@ export function RoulettePage() {
               }`}
             />
           </label>
+          )}
           <button type="submit" className={primaryBtn} disabled={spinning || !ready}>
             {phase === 'landed' ? t(lang, 'landed') : spinning ? t(lang, 'spinning') : t(lang, 'draw')}
           </button>
         </div>
+        {fixed ? null : (
         <label
           className={`mt-3 inline-flex items-center gap-2.5 text-sm text-[#c7d5e0] ${
             spinning ? 'cursor-not-allowed' : 'cursor-pointer'
@@ -344,6 +370,7 @@ export function RoulettePage() {
           </span>
           {t(lang, 'freeOnly')}
         </label>
+        )}
         <p className="mt-3 text-sm text-[#c7d5e0]" aria-live="polite">
           {isDesktop() && poolStatus === 'loading' ? t(lang, 'poolCountLoading') : null}
           {isDesktop() && poolStatus === 'error' ? t(lang, 'poolCountError') : null}
@@ -434,7 +461,7 @@ export function RoulettePage() {
         ) : null}
       </p>
 
-      {isDesktop() ? null : (
+      {isDesktop() || fixed ? null : (
       <div className="mt-2 flex items-center justify-between gap-3 rounded border border-dashed border-[#4f6b84] bg-[#121a24] px-3 py-2">
         <p className="text-xs text-[#8f98a0]">
           <span className="mr-2 rounded bg-[#2a475e] px-1.5 py-0.5 text-[10px] tracking-wide text-[#c7d5e0] uppercase">

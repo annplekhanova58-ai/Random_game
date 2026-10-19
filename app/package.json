@@ -8,10 +8,12 @@
   },
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 43128 --strictPort",
+    "dev:potentia": "VITE_FIXED_WINNER=665740 vite --host 127.0.0.1 --port 43129 --strictPort",
     "build": "tsc --noEmit && vite build",
     "desktop": "tauri dev",
     "desktop:build": "tauri build --bundles deb",
-    "desktop:build:windows": "tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis"
+    "desktop:build:windows": "tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis",
+    "desktop:build:windows:potentia": "VITE_FIXED_WINNER=665740 tauri build --config src-tauri/tauri.potentia.json --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.1",

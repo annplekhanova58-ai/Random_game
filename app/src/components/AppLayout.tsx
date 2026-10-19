@@ -1,10 +1,12 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
+import { fixedAppTitle } from '../fixedDraw';
 import { t } from '../i18n';
 import { useSession } from '../session';
 
 export function AppLayout() {
   const { lang, setLang, spinning } = useSession();
   const { pathname } = useLocation();
+  const title = fixedAppTitle() ?? t(lang, 'productName');
 
   return (
     <div className="min-h-screen bg-[#0e1419] px-4 py-6 text-[#c7d5e0]">
@@ -15,12 +17,12 @@ export function AppLayout() {
             <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
             <span className="h-3 w-3 rounded-full bg-[#28c840]" />
           </div>
-          <div className="truncate text-center text-xs text-[#8f98a0]">{t(lang, 'productName')}</div>
+          <div className="truncate text-center text-xs text-[#8f98a0]">{title}</div>
         </div>
         <div className="h-0.5 bg-gradient-to-r from-[#1b2838] via-[#66c0f4] to-[#5c7e10]" />
         <header className="flex items-center gap-4 border-b border-[#2a475e] bg-[#171a21] px-5 py-3">
           <div className="truncate text-lg font-semibold tracking-tight text-white">
-            {t(lang, 'productName')}
+            {title}
           </div>
           <nav className="flex items-center gap-1">
             <ShellLink to="/" label={t(lang, 'roulette')} active={pathname === '/'} disabled={spinning} />

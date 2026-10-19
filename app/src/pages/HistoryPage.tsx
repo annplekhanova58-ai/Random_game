@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { GameCover } from '../components/GameCover';
 import { SteamLink } from '../components/SteamLink';
+import { isFixedWinner } from '../fixedDraw';
 import { formatPrice, formatWhen, localizedNote, t } from '../i18n';
 import { useSession } from '../session';
 import { dangerBtn, primaryBtn, secondaryBtn } from '../ui';
@@ -16,7 +17,9 @@ export function HistoryPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-white">{t(lang, 'history')}</h1>
-          <p className="mt-1 text-sm text-[#8f98a0]">{t(lang, 'historyLead')}</p>
+          <p className="mt-1 text-sm text-[#8f98a0]">
+            {t(lang, isFixedWinner() ? 'fixedHistoryLead' : 'historyLead')}
+          </p>
         </div>
         {rows.length > 0 ? (
           <button type="button" className={secondaryBtn} onClick={() => setConfirming(true)}>
