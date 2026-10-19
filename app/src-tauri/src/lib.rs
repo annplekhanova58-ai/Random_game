@@ -354,6 +354,19 @@ async fn steam_search(start: u32, count: u32, free_only: bool, max_price_usd: Op
     })
 }
 
+fn steam_store_url(app_id: u32) -> String {
+    format!("https://store.steampowered.com/app/{app_id}")
+}
+
+/// Opens the store page in the system browser. The window's webview ignores `target=_blank`.
+#[tauri::command]
+fn open_steam(app_id: u32) -> Result<(), String> {
+    if app_id == 0 {
+        return Err("missing app".into());
+    }
+    open::that_detached(steam_store_url(app_id)).map_err(|err| err.to_string())
+}
+
 #[tauri::command]
 async fn steam_details(app_id: u32) -> Result<Option<AppDetails>, String> {
     let url = format!("https://store.steampowered.com/api/appdetails?appids={app_id}&cc=US");
@@ -412,7 +425,8 @@ pub fn run() {
             history_delete,
             history_clear,
             steam_search,
-            steam_details
+            steam_details,
+            open_steam
         ])
         .run(tauri::generate_context!())
         .expect("random steam game window failed");
@@ -420,7 +434,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_hits, search_url};
+    use super::{parse_hits, search_url, steam_store_url};
 
     const ROW: &str = r#"
         <a data-ds-appid="4435490"><img src="https://cdn.example/cod.jpg" >
@@ -451,6 +465,11 @@ mod tests {
         assert_eq!(hits[1].cover, "https://cdn.example/cs.jpg");
         assert_eq!(hits[2].app_id, 10);
         assert_eq!(hits[2].price_cents, Some(500));
+    }
+
+    #[test]
+    fn steam_link_stays_on_the_store_page() {
+        assert_eq!(steam_store_url(730), "https://store.steampowered.com/app/730");
     }
 
     #[test]

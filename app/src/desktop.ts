@@ -211,6 +211,7 @@ export async function drawFromSteam(input: {
     if (!details || !accepts(details, input.freeOnly, input.maxPriceUsd, input.seen)) continue;
 
     const priceUsd = details.priceUsd ?? 0;
+    const savedCover = details.cover || hit.cover;
     let saved: RollDto;
     try {
       saved = await invoke<RollDto>('history_add', {
@@ -218,7 +219,7 @@ export async function drawFromSteam(input: {
           appId: details.appId,
           name: details.name,
           priceUsd,
-          cover: details.cover || hit.cover,
+          cover: savedCover,
           description: details.description,
         },
       });
@@ -228,18 +229,20 @@ export async function drawFromSteam(input: {
       return { kind: 'steam' };
     }
 
-    const winner = toGame({
+    const winnerCard = toGame({
       appId: details.appId,
       name: details.name,
       priceUsd,
       cover: saved.cover,
       description: details.description,
     });
+    // Search capsules are small. The result card keeps the large header image.
+    const moving = hit.cover ? { ...winnerCard, cover: hit.cover } : winnerCard;
     const pool = page.hits
       .filter((item) => hitPriceOk(item, input.freeOnly, input.maxPriceUsd) && !input.seen.has(item.appId))
       .map(hitToGame);
-    if (!pool.some((game) => game.appId === winner.appId)) pool.unshift(winner);
-    return { kind: 'card', roll: toRoll(saved), strip: pool, winner };
+    if (!pool.some((game) => game.appId === moving.appId)) pool.unshift(moving);
+    return { kind: 'card', roll: toRoll(saved), strip: pool, winner: moving };
   }
   return { kind: 'empty' };
 }

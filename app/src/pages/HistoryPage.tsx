@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { GameCover } from '../components/GameCover';
-import { steamUrl } from '../data/mock';
+import { SteamLink } from '../components/SteamLink';
 import { formatPrice, formatWhen, localizedNote, t } from '../i18n';
 import { useSession } from '../session';
 import { dangerBtn, primaryBtn, secondaryBtn } from '../ui';
@@ -53,14 +53,9 @@ export function HistoryPage() {
               <time dateTime={roll.rolledAt} className="w-44 shrink-0 text-right text-xs text-[#8f98a0]">
                 {formatWhen(roll.rolledAt, lang)}
               </time>
-              <a
-                href={steamUrl(roll.appId)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="shrink-0 text-sm text-[#66c0f4] underline"
-              >
+              <SteamLink appId={roll.appId} className="shrink-0 text-sm text-[#66c0f4] underline">
                 {t(lang, 'openSteam')}
-              </a>
+              </SteamLink>
               <button
                 type="button"
                 onClick={() => deleteRoll(roll.id)}

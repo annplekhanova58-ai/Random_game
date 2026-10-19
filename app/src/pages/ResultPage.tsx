@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { GameCover } from '../components/GameCover';
-import { steamUrl } from '../data/mock';
+import { SteamLink } from '../components/SteamLink';
 import { formatPrice, localizedNote, t } from '../i18n';
 import { useSession } from '../session';
 import { primaryBtn, secondaryBtn } from '../ui';
@@ -34,14 +34,9 @@ export function ResultPage() {
               </p>
               <p className="mt-4 text-xs tracking-wide text-[#8f98a0] uppercase">{t(lang, 'priceAtDraw')}</p>
               <p className="text-3xl font-semibold text-[#c6e05a]">{formatPrice(currentRoll.priceUsd, lang)}</p>
-              <a
-                href={steamUrl(currentRoll.appId)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 inline-flex text-sm text-[#66c0f4] underline"
-              >
+              <SteamLink appId={currentRoll.appId} className="mt-4 inline-flex text-sm text-[#66c0f4] underline">
                 {t(lang, 'openSteam')}
-              </a>
+              </SteamLink>
             </div>
           </article>
           <div className="mt-6 flex flex-wrap gap-3">

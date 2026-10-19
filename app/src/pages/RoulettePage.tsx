@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
+import { flushSync } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { GameCover } from '../components/GameCover';
 import { catalog, createRoll, type RollRecord, type SteamGame } from '../data/mock';
@@ -21,6 +22,46 @@ import { useSession } from '../session';
 import { primaryBtn } from '../ui';
 
 const SPIN_MS = 2600;
+const COVER_WAIT_MS = 900;
+
+/** Decode strip covers before the transform starts, so WebView2 does not hitch on the first frames. */
+function preloadCovers(urls: string[]): Promise<void> {
+  const unique = [...new Set(urls.filter((url) => url.length > 0))];
+  if (unique.length === 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      resolve();
+    };
+    let pending = unique.length;
+    const one = () => {
+      pending -= 1;
+      if (pending <= 0) finish();
+    };
+    const timer = window.setTimeout(finish, COVER_WAIT_MS);
+    for (const url of unique) {
+      const img = new Image();
+      let reported = false;
+      const report = () => {
+        if (reported) return;
+        reported = true;
+        if (typeof img.decode === 'function') {
+          img.decode().then(one, one);
+          return;
+        }
+        one();
+      };
+      img.onload = report;
+      img.onerror = report;
+      img.decoding = 'async';
+      img.src = url;
+      if (img.complete) report();
+    }
+  });
+}
 
 export function RoulettePage() {
   const navigate = useNavigate();
@@ -50,7 +91,6 @@ export function RoulettePage() {
   const [strip, setStrip] = useState<SteamGame[]>(() => (isDesktop() ? [] : [...catalog, ...catalog, ...catalog]));
   const [offset, setOffset] = useState(() => cardOffset(3, 1100));
   const [animate, setAnimate] = useState(false);
-  const [spinId, setSpinId] = useState(0);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const phaseRef = useRef(phase);
@@ -131,15 +171,19 @@ export function RoulettePage() {
     }, 800);
   }
 
-  function startSpin(pool: SteamGame[], winner: SteamGame, existing?: RollRecord) {
+  async function startSpin(pool: SteamGame[], winner: SteamGame, existing?: RollRecord) {
+    const next = buildStrip(pool, winner);
     commitRoll(existing ?? createRoll(winner));
     doneRef.current = false;
-    setStrip(buildStrip(pool, winner));
-    setAnimate(false);
-    setOffset(0);
-    setSpinId((value) => value + 1);
-    setPhaseBoth('spinning');
     setSpinning(true);
+    await preloadCovers(next.map((game) => game.cover));
+    if (!mountedRef.current) return;
+    flushSync(() => {
+      setStrip(next);
+      setAnimate(false);
+      setOffset(0);
+      setPhaseBoth('spinning');
+    });
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         if (!mountedRef.current) return;
@@ -147,12 +191,12 @@ export function RoulettePage() {
         const width = measured > 0 ? measured : 640;
         setAnimate(true);
         setOffset(landOffset(width));
+        if (backupRef.current != null) window.clearTimeout(backupRef.current);
+        backupRef.current = window.setTimeout(() => {
+          if (phaseRef.current === 'spinning') finishSpin();
+        }, SPIN_MS + 400);
       });
     });
-    if (backupRef.current != null) window.clearTimeout(backupRef.current);
-    backupRef.current = window.setTimeout(() => {
-      if (phaseRef.current === 'spinning') finishSpin();
-    }, SPIN_MS + 700);
   }
 
   async function onSubmit(event: FormEvent) {
@@ -191,7 +235,7 @@ export function RoulettePage() {
         setSpinning(false);
         return;
       }
-      startSpin(outcome.strip, outcome.winner, outcome.roll);
+      void startSpin(outcome.strip, outcome.winner, outcome.roll);
       return;
     }
 
@@ -223,7 +267,7 @@ export function RoulettePage() {
       setEmptyCatalog(true);
       return;
     }
-    startSpin(pool, winner);
+    void startSpin(pool, winner);
   }
 
   const prototypeCount = useMemo(() => {
@@ -340,7 +384,11 @@ export function RoulettePage() {
         <div className="pointer-events-none absolute top-0 left-1/2 z-30 -translate-x-1/2 -translate-y-px">
           <div className="h-0 w-0 border-x-8 border-t-8 border-x-transparent border-t-[#a4d007]" />
         </div>
-        <div ref={viewportRef} className="relative h-[108px] overflow-hidden rounded-lg border border-[#2a475e] bg-[#0b1016]">
+        <div
+          ref={viewportRef}
+          className="relative h-[108px] overflow-hidden rounded-lg border border-[#2a475e] bg-[#0b1016]"
+          style={{ transform: 'translateZ(0)' }}
+        >
           <div
             data-marker
             className="pointer-events-none absolute top-1/2 left-1/2 z-20 h-[78px] w-[168px] -translate-x-1/2 -translate-y-1/2 rounded ring-2 ring-[#a4d007]"
@@ -348,11 +396,11 @@ export function RoulettePage() {
           <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-16 bg-gradient-to-r from-[#0b1016] to-transparent" />
           <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-[#0b1016] to-transparent" />
           <div
-            key={spinId}
             className="absolute top-0 left-0 flex h-full w-max items-center"
             style={{
               transform: `translate3d(${offset}px, 0, 0)`,
               transition: animate ? `transform ${SPIN_MS}ms cubic-bezier(0.07, 0.55, 0.05, 1)` : 'none',
+              willChange: phase === 'spinning' ? 'transform' : 'auto',
             }}
             onTransitionEnd={(event) => {
               if (event.propertyName !== 'transform') return;
@@ -363,9 +411,9 @@ export function RoulettePage() {
           >
             {shown.map((game, index) => (
               <div
-                key={`${spinId}-${game.appId}-${index}`}
+                key={`${game.appId}-${index}`}
                 className="shrink-0 overflow-hidden rounded"
-                style={{ width: CARD_W, height: CARD_H, marginRight: CARD_GAP }}
+                style={{ width: CARD_W, height: CARD_H, marginRight: CARD_GAP, contain: 'strict' }}
                 data-name={game.name}
                 data-landing={phase !== 'idle' && index === WIN_INDEX ? 'true' : undefined}
               >

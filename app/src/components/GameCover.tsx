@@ -38,6 +38,7 @@ export function GameCover({
       alt={alt}
       className={className}
       draggable={false}
+      decoding="async"
       onError={() => setFailed(true)}
     />
   );
