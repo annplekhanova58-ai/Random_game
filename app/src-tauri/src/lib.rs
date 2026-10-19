@@ -52,6 +52,9 @@ struct SearchHit {
     app_id: u32,
     name: String,
     cover: String,
+    /// Current price in USD cents. `Some(0)` is free. `None` means the row had no price.
+    price_cents: Option<i64>,
+    pre_purchase: bool,
 }
 
 #[derive(Serialize)]
@@ -154,18 +157,45 @@ fn between<'a>(haystack: &'a str, start: &str, end: &str) -> Option<&'a str> {
     Some(&rest[..to])
 }
 
+fn row_price_cents(window: &str) -> Option<i64> {
+    let marker = "discount_final_price";
+    let idx = window.find(marker)?;
+    let tail = &window[idx..window.len().min(idx + 220)];
+    // The CSS class is the source of truth. CS2 advertises data-price-final="1499" and still says Free.
+    if tail.contains(" free") || tail.contains(">Free<") || tail.contains(">Бесплатно<") {
+        return Some(0);
+    }
+    let key = "data-price-final=\"";
+    let start = window[..idx]
+        .rfind(key)
+        .or_else(|| window[idx..].find(key).map(|pos| idx + pos))?;
+    let digits: String = window[start + key.len()..]
+        .chars()
+        .take_while(|ch| ch.is_ascii_digit())
+        .collect();
+    digits.parse().ok()
+}
+
 fn parse_hits(html: &str) -> Vec<SearchHit> {
     let mut hits = Vec::new();
     for part in html.split("data-ds-appid=\"").skip(1) {
         let Some(end) = part.find('"') else { continue };
-        let Ok(app_id) = part[..end].parse::<u32>() else { continue };
-        let window = &part[..part.len().min(4000)];
+        let id_token = part[..end].split(',').next().unwrap_or("").trim();
+        let Ok(app_id) = id_token.parse::<u32>() else { continue };
+        let window_end = part.find("</a>").unwrap_or(part.len()).min(8000);
+        let window = &part[..window_end];
         let name = unescape(between(window, "<span class=\"title\">", "</span>").unwrap_or(""));
         let cover = unescape(between(window, "<img src=\"", "\"").unwrap_or(""));
         if name.is_empty() {
             continue;
         }
-        hits.push(SearchHit { app_id, name, cover });
+        hits.push(SearchHit {
+            app_id,
+            name,
+            cover,
+            price_cents: row_price_cents(window),
+            pre_purchase: window.contains("prepurchase_tag"),
+        });
     }
     hits
 }
@@ -177,19 +207,29 @@ fn search_url(start: u32, count: u32, free_only: bool, max_price_usd: Option<f64
     if free_only {
         url.push_str("&maxprice=free");
     } else if let Some(price) = max_price_usd {
-        let dollars = price.ceil().max(0.0) as u32;
-        url.push_str(&format!("&maxprice={dollars}"));
+        // Steam treats maxprice=0 as "no filter". A ceiling of 0 means free games only.
+        if price <= 0.0 {
+            url.push_str("&maxprice=free");
+        } else {
+            let dollars = price.ceil() as u32;
+            url.push_str(&format!("&maxprice={dollars}"));
+        }
     }
     url
 }
 
 async fn get_json(url: String) -> Result<Value, String> {
     let client = reqwest::Client::builder()
-        .user_agent("RandomSteamGame/0.1")
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
         .timeout(std::time::Duration::from_secs(20))
         .build()
         .map_err(|err| err.to_string())?;
-    let response = client.get(url).send().await.map_err(|err| err.to_string())?;
+    let response = client
+        .get(url)
+        .header("Accept-Language", "en-US,en;q=0.9")
+        .send()
+        .await
+        .map_err(|err| err.to_string())?;
     if !response.status().is_success() {
         return Err(format!("Steam HTTP {}", response.status()));
     }
@@ -376,4 +416,50 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("random steam game window failed");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_hits, search_url};
+
+    const ROW: &str = r#"
+        <a data-ds-appid="4435490"><img src="https://cdn.example/cod.jpg" >
+            <span class="title">Call of Duty</span>
+            <div class="prepurchase_tag">Pre-Purchase</div>
+            <div data-price-final="6999"><div class="discount_final_price">$69.99</div></div>
+        </a>
+        <a data-ds-appid="730"><img src="https://cdn.example/cs.jpg" >
+            <span class="title">Counter-Strike 2</span>
+            <div data-price-final="1499"><div class="discount_final_price free">Free</div></div>
+        </a>
+        <a data-ds-appid="10,20"><img src="https://cdn.example/pack.jpg" >
+            <span class="title">Pack</span>
+            <div data-price-final="500"><div class="discount_final_price">$5.00</div></div>
+        </a>
+    "#;
+
+    #[test]
+    fn parses_price_free_label_and_prepurchase() {
+        let hits = parse_hits(ROW);
+        assert_eq!(hits.len(), 3);
+        assert_eq!(hits[0].app_id, 4435490);
+        assert!(hits[0].pre_purchase);
+        assert_eq!(hits[0].price_cents, Some(6999));
+        assert_eq!(hits[1].app_id, 730);
+        assert!(!hits[1].pre_purchase);
+        assert_eq!(hits[1].price_cents, Some(0));
+        assert_eq!(hits[1].cover, "https://cdn.example/cs.jpg");
+        assert_eq!(hits[2].app_id, 10);
+        assert_eq!(hits[2].price_cents, Some(500));
+    }
+
+    #[test]
+    fn zero_ceiling_asks_steam_for_free_games() {
+        let url = search_url(0, 25, false, Some(0.0));
+        assert!(url.contains("maxprice=free"));
+        assert!(!url.contains("maxprice=0"));
+        let paid = search_url(25, 25, false, Some(19.2));
+        assert!(paid.contains("maxprice=20"));
+        assert!(paid.contains("start=25"));
+    }
 }

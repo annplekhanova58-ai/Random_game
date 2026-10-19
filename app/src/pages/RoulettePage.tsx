@@ -2,8 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { GameCover } from '../components/GameCover';
-import { catalog, createRoll, type SteamGame } from '../data/mock';
-import { drawFromSteam, isDesktop } from '../desktop';
+import { catalog, createRoll, type RollRecord, type SteamGame } from '../data/mock';
+import { drawFromSteam, isDesktop, previewStorefront } from '../desktop';
 import {
   CARD_GAP,
   CARD_H,
@@ -44,7 +44,8 @@ export function RoulettePage() {
   const [emptyCatalog, setEmptyCatalog] = useState(false);
   const [steamError, setSteamError] = useState(false);
   const [phase, setPhase] = useState<'idle' | 'spinning' | 'landed'>('idle');
-  const [strip, setStrip] = useState<SteamGame[]>(resting);
+  const [preview, setPreview] = useState<SteamGame[]>([]);
+  const [strip, setStrip] = useState<SteamGame[]>(() => (isDesktop() ? [] : [...catalog, ...catalog, ...catalog]));
   const [offset, setOffset] = useState(() => cardOffset(3, 1100));
   const [animate, setAnimate] = useState(false);
   const [spinId, setSpinId] = useState(0);
@@ -64,6 +65,22 @@ export function RoulettePage() {
       if (navRef.current != null) window.clearTimeout(navRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isDesktop() || !ready) return;
+    const price = freeOnly ? null : parseUsd(priceInput);
+    if (!freeOnly && price == null) return;
+    let cancel = false;
+    const timer = window.setTimeout(() => {
+      void previewStorefront({ freeOnly, maxPriceUsd: price }).then((games) => {
+        if (!cancel) setPreview(games);
+      });
+    }, 350);
+    return () => {
+      cancel = true;
+      window.clearTimeout(timer);
+    };
+  }, [ready, freeOnly, priceInput]);
 
   useLayoutEffect(() => {
     const node = viewportRef.current;
@@ -98,8 +115,8 @@ export function RoulettePage() {
     }, 800);
   }
 
-  function startSpin(pool: SteamGame[], winner: SteamGame) {
-    commitRoll(createRoll(winner));
+  function startSpin(pool: SteamGame[], winner: SteamGame, existing?: RollRecord) {
+    commitRoll(existing ?? createRoll(winner));
     doneRef.current = false;
     setStrip(buildStrip(pool, winner));
     setAnimate(false);
@@ -158,8 +175,7 @@ export function RoulettePage() {
         setSpinning(false);
         return;
       }
-      commitRoll(outcome.roll);
-      startSpin(outcome.strip, outcome.winner);
+      startSpin(outcome.strip, outcome.winner, outcome.roll);
       return;
     }
 
@@ -194,7 +210,7 @@ export function RoulettePage() {
     startSpin(pool, winner);
   }
 
-  const shown = phase === 'idle' ? resting : strip;
+  const shown = phase === 'idle' ? (isDesktop() ? preview : resting) : strip;
 
   return (
     <div>
@@ -331,6 +347,7 @@ export function RoulettePage() {
       </div>
 
       <p className="mt-3 min-h-5 text-center text-sm text-[#8f98a0]" aria-live="polite">
+        {phase === 'idle' && isDesktop() && preview.length === 0 ? t(lang, 'loadingStore') : null}
         {phase === 'spinning' ? t(lang, 'spinning') : null}
         {phase === 'landed' && currentRoll ? (
           <>

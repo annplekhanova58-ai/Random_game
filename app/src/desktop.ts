@@ -25,6 +25,8 @@ interface SearchHit {
   appId: number;
   name: string;
   cover: string;
+  priceCents: number | null;
+  prePurchase: boolean;
 }
 
 interface SearchPage {
@@ -124,6 +126,10 @@ export type DrawOutcome =
   | { kind: 'empty' }
   | { kind: 'steam' };
 
+/** Steam's search snaps `start` down to a multiple of this and returns one page. */
+const PAGE = 25;
+const DRAW_ATTEMPTS = 24;
+
 function accepts(details: AppDetails, freeOnly: boolean, maxPriceUsd: number | null, seen: Set<number>): boolean {
   if (seen.has(details.appId)) return false;
   if (details.kind !== 'game' || details.comingSoon) return false;
@@ -133,6 +139,44 @@ function accepts(details: AppDetails, freeOnly: boolean, maxPriceUsd: number | n
   return Math.round(details.priceUsd * 100) <= Math.round(maxPriceUsd * 100);
 }
 
+function hitPriceOk(hit: SearchHit, freeOnly: boolean, maxPriceUsd: number | null): boolean {
+  if (hit.prePurchase || hit.priceCents == null) return false;
+  if (freeOnly) return hit.priceCents === 0;
+  if (maxPriceUsd == null) return false;
+  return hit.priceCents <= Math.round(maxPriceUsd * 100);
+}
+
+function hitToGame(hit: SearchHit): SteamGame {
+  return toGame({
+    appId: hit.appId,
+    name: hit.name,
+    priceUsd: (hit.priceCents ?? 0) / 100,
+    cover: hit.cover,
+    description: '',
+  });
+}
+
+async function searchPage(start: number, freeOnly: boolean, maxPriceUsd: number | null): Promise<SearchPage> {
+  return invoke<SearchPage>('steam_search', {
+    start,
+    count: PAGE,
+    freeOnly,
+    maxPriceUsd: freeOnly ? null : maxPriceUsd,
+  });
+}
+
+export async function previewStorefront(input: {
+  freeOnly: boolean;
+  maxPriceUsd: number | null;
+}): Promise<SteamGame[]> {
+  try {
+    const page = await searchPage(0, input.freeOnly, input.maxPriceUsd);
+    return page.hits.filter((hit) => hitPriceOk(hit, input.freeOnly, input.maxPriceUsd)).map(hitToGame);
+  } catch {
+    return [];
+  }
+}
+
 export async function drawFromSteam(input: {
   freeOnly: boolean;
   maxPriceUsd: number | null;
@@ -140,30 +184,23 @@ export async function drawFromSteam(input: {
 }): Promise<DrawOutcome> {
   let first: SearchPage;
   try {
-    first = await invoke<SearchPage>('steam_search', {
-      start: 0,
-      count: 1,
-      freeOnly: input.freeOnly,
-      maxPriceUsd: input.freeOnly ? null : input.maxPriceUsd,
-    });
+    first = await searchPage(0, input.freeOnly, input.maxPriceUsd);
   } catch {
     return { kind: 'steam' };
   }
   if (first.totalCount === 0) return { kind: 'empty' };
 
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    const start = Math.floor(Math.random() * first.totalCount);
+  for (let attempt = 0; attempt < DRAW_ATTEMPTS; attempt += 1) {
+    const index = Math.floor(Math.random() * first.totalCount);
+    const start = index - (index % PAGE);
+    const slot = index % PAGE;
     let page: SearchPage;
     let details: AppDetails | null;
+    let hit: SearchHit | undefined;
     try {
-      page = await invoke<SearchPage>('steam_search', {
-        start,
-        count: 1,
-        freeOnly: input.freeOnly,
-        maxPriceUsd: input.freeOnly ? null : input.maxPriceUsd,
-      });
-      const hit = page.hits[0];
-      if (!hit || input.seen.has(hit.appId)) continue;
+      page = await searchPage(start, input.freeOnly, input.maxPriceUsd);
+      hit = page.hits[slot];
+      if (!hit || input.seen.has(hit.appId) || !hitPriceOk(hit, input.freeOnly, input.maxPriceUsd)) continue;
       details = await invoke<AppDetails | null>('steam_details', { appId: hit.appId });
     } catch {
       return { kind: 'steam' };
@@ -178,11 +215,13 @@ export async function drawFromSteam(input: {
           appId: details.appId,
           name: details.name,
           priceUsd,
-          cover: details.cover || page.hits[0]?.cover || '',
+          cover: details.cover || hit.cover,
           description: details.description,
         },
       });
-    } catch {
+    } catch (error) {
+      const message = typeof error === 'string' ? error : error instanceof Error ? error.message : String(error);
+      if (message.toLowerCase().includes('unique')) continue;
       return { kind: 'steam' };
     }
 
@@ -193,8 +232,11 @@ export async function drawFromSteam(input: {
       cover: saved.cover,
       description: details.description,
     });
-    const strip = page.hits.length > 0 ? [winner] : [winner];
-    return { kind: 'card', roll: toRoll(saved), strip, winner };
+    const pool = page.hits
+      .filter((item) => hitPriceOk(item, input.freeOnly, input.maxPriceUsd) && !input.seen.has(item.appId))
+      .map(hitToGame);
+    if (!pool.some((game) => game.appId === winner.appId)) pool.unshift(winner);
+    return { kind: 'card', roll: toRoll(saved), strip: pool, winner };
   }
   return { kind: 'empty' };
 }
