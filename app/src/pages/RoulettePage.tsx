@@ -22,7 +22,8 @@ import { formatPoolCount, t } from '../i18n';
 import { useSession } from '../session';
 import { primaryBtn } from '../ui';
 
-const SPIN_MS = 2600;
+/** The main app spins for 7.8s. The separate Book Of Potentia 2 build keeps 2.6s. */
+const SPIN_MS = isFixedWinner() ? 2600 : 2600 * 3;
 const COVER_WAIT_MS = 900;
 
 /** Decode strip covers before the transform starts, so WebView2 does not hitch on the first frames. */
