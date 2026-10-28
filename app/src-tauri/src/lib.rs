@@ -418,7 +418,7 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 // Maximized keeps the system title bar: minimize, restore, and close.
                 let _ = window.set_fullscreen(false);
-                let _ = window.set_maximized(true);
+                let _ = window.maximize();
             }
             Ok(())
         })
