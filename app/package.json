@@ -13,6 +13,7 @@
     "desktop": "tauri dev",
     "desktop:build": "tauri build --bundles deb",
     "desktop:build:windows": "tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis",
+    "desktop:build:windows:native": "tauri build --bundles nsis",
     "desktop:build:windows:potentia": "VITE_FIXED_WINNER=665740 tauri build --config src-tauri/tauri.potentia.json --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis"
   },
   "dependencies": {

@@ -4,6 +4,8 @@
 
 **Запуск:** `/build-product` в вашей IDE (Cursor, Claude Code, Windsurf, Copilot и др.)
 
+Windows-установщик Random Steam Game публикуется в GitHub Releases. Как это устроено: [Windows-релиз Random Steam Game](#windows-релиз-random-steam-game).
+
 ---
 
 ## Quick start
@@ -422,6 +424,49 @@ my-product/
 - **Цикл исправлений тестов** — max 3 итерации per phase, затем эскалация пользователю
 
 ---
+
+## Windows-релиз Random Steam Game
+
+Приложение в каталоге `app` публикует NSIS-установщик через GitHub Actions.
+
+Workflow [`.github/workflows/windows-installer.yml`](.github/workflows/windows-installer.yml) запускается на `windows-latest`:
+
+- при каждом push в ветку `main`;
+- вручную: вкладка **Actions** → **Windows installer** → **Run workflow**, ветка `main`.
+
+Сборка на раннере вызывает `npm run desktop:build:windows:native` в `app`. Это `tauri build --bundles nsis`: тот же NSIS-установщик, что и локальная команда `npm run desktop:build:windows` на Linux. На Linux к ней добавляется кросс-компиляция через `cargo-xwin`, на Windows она не нужна. Готовый файл переименовывается в `Random-Steam-Game-Setup.exe` и прикрепляется к GitHub Release.
+
+Тег каждого запуска уникален: `v<версия>-<номер сборки>`, например `v0.1.0-12`. Версия читается из `app/src-tauri/tauri.conf.json` и должна совпадать с `app/package.json` (сейчас `0.1.0`). Релиз публикуется как обычный выпуск и помечается **latest**, поэтому ссылка на скачивание не меняется:
+
+https://github.com/annplekhanova58-ai/Random_game/releases/latest/download/Random-Steam-Game-Setup.exe
+
+Тихая установка для текущего пользователя:
+
+```bat
+Random-Steam-Game-Setup.exe /S
+```
+
+Файлы оказываются в `%LOCALAPPDATA%\Random Steam Game\`, программа — `random-steam-game.exe`.
+
+Тихое удаление:
+
+```bat
+"%LOCALAPPDATA%\Random Steam Game\uninstall.exe" /S
+```
+
+Флаги `/S` — стандартный тихий режим NSIS. Их даёт шаблон установщика Tauri (`installMode: currentUser` в `app/src-tauri/tauri.conf.json`): установщик пишет `uninstall.exe` рядом с программой, и этот деинсталлятор тоже принимает `/S`.
+
+### Что сделать владельцу после слияния
+
+1. Слить pull request в `main`. Этот push сам запустит workflow.
+2. Открыть **Settings → Actions → General → Workflow permissions** и выбрать **Read and write permissions**. Иначе `GITHUB_TOKEN` не сможет создать тег и Release. Если политику задаёт организация, разрешение на запись для этого репозитория выдаёт её администратор.
+3. Открыть вкладку **Actions**. Если GitHub просит разрешить workflows для репозитория, подтвердить запуск.
+4. Дождаться зелёного прогона **Windows installer**. После него ссылка выше отдаёт `Random-Steam-Game-Setup.exe`.
+5. Повторный запуск того же прогона обновляет файл в том же релизе. Новый push в `main` создаёт новый тег и снова помечает его latest.
+
+Подписи кода у установщика нет: SmartScreen может показать предупреждение «Windows защитил ваш компьютер».
+
+Подробности локальной сборки: [`app/README.md`](app/README.md).
 
 ## Лицензия
 
