@@ -11,10 +11,14 @@ export function GameCover({
   game,
   className,
   alt,
+  decoding = 'async',
+  loading = 'eager',
 }: {
   game: CoverGame;
   className?: string;
   alt: string;
+  decoding?: 'sync' | 'async' | 'auto';
+  loading?: 'eager' | 'lazy';
 }) {
   const [failed, setFailed] = useState(false);
 
@@ -38,7 +42,8 @@ export function GameCover({
       alt={alt}
       className={className}
       draggable={false}
-      decoding="async"
+      decoding={decoding}
+      loading={loading}
       onError={() => setFailed(true)}
     />
   );

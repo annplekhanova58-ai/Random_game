@@ -14,9 +14,11 @@ import {
   buildStrip,
   cardOffset,
   eligibleGames,
+  idleFocusIndex,
   landOffset,
   parseUsd,
   pickGame,
+  shuffleGames,
 } from '../draw';
 import { formatPoolCount, t } from '../i18n';
 import { useSession } from '../session';
@@ -24,6 +26,8 @@ import { primaryBtn } from '../ui';
 
 /** The main app spins for 7.8s. The separate Book Of Potentia 2 build keeps 2.6s. */
 const SPIN_MS = isFixedWinner() ? 2600 : 2600 * 3;
+/** Steady glide, then a soft stop. The long crawl of the old curve read as stuttering. */
+const SPIN_EASE = isFixedWinner() ? 'cubic-bezier(0.07, 0.55, 0.05, 1)' : 'cubic-bezier(0.15, 0.75, 0.25, 1)';
 const COVER_WAIT_MS = 900;
 
 /** Decode strip covers before the transform starts, so WebView2 does not hitch on the first frames. */
@@ -82,7 +86,11 @@ export function RoulettePage() {
   } = useSession();
 
   const fixed = isFixedWinner();
-  const resting = useMemo(() => [...catalog, ...catalog, ...catalog], []);
+  const resting = useMemo(() => {
+    const once = shuffleGames(catalog);
+    return [...once, ...shuffleGames(catalog)];
+  }, []);
+  const idleIndexRef = useRef(idleFocusIndex(Math.max(1, Math.ceil(catalog.length))));
   const [priceInput, setPriceInput] = useState(() => String(savedPrice));
   const [fieldError, setFieldError] = useState(false);
   const [emptyCatalog, setEmptyCatalog] = useState(false);
@@ -133,6 +141,11 @@ export function RoulettePage() {
         setPreview(page.games);
         setPoolCount(page.totalCount);
         setPoolStatus('ready');
+        if (page.games.length > 0) {
+          idleIndexRef.current = idleFocusIndex(page.games.length);
+          const width = viewportRef.current?.clientWidth ?? 0;
+          if (phaseRef.current === 'idle' && width > 0) setOffset(cardOffset(idleIndexRef.current, width));
+        }
       });
     }, 350);
     return () => {
@@ -147,7 +160,7 @@ export function RoulettePage() {
     const alignIdle = () => {
       if (phaseRef.current !== 'idle') return;
       const width = node.clientWidth;
-      if (width > 0) setOffset(cardOffset(3, width));
+      if (width > 0) setOffset(cardOffset(idleIndexRef.current, width));
     };
     alignIdle();
     window.addEventListener('resize', alignIdle);
@@ -187,6 +200,7 @@ export function RoulettePage() {
       setOffset(0);
       setPhaseBoth('spinning');
     });
+    viewportRef.current?.getBoundingClientRect();
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         if (!mountedRef.current) return;
@@ -417,8 +431,8 @@ export function RoulettePage() {
             className="absolute top-0 left-0 flex h-full w-max items-center"
             style={{
               transform: `translate3d(${offset}px, 0, 0)`,
-              transition: animate ? `transform ${SPIN_MS}ms cubic-bezier(0.07, 0.55, 0.05, 1)` : 'none',
-              willChange: phase === 'spinning' ? 'transform' : 'auto',
+              transition: animate ? `transform ${SPIN_MS}ms ${SPIN_EASE}` : 'none',
+              willChange: 'transform',
             }}
             onTransitionEnd={(event) => {
               if (event.propertyName !== 'transform') return;
@@ -435,7 +449,7 @@ export function RoulettePage() {
                 data-name={game.name}
                 data-landing={phase !== 'idle' && index === WIN_INDEX ? 'true' : undefined}
               >
-                <GameCover game={game} alt="" className="h-full w-full object-cover" />
+                <GameCover game={game} alt="" className="h-full w-full object-cover" decoding="sync" loading="eager" />
               </div>
             ))}
           </div>

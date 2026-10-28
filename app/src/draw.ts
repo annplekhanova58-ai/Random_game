@@ -47,11 +47,40 @@ export function pickGame(pool: SteamGame[]): SteamGame | null {
   return pool[index] ?? null;
 }
 
+export function shuffleGames<T>(items: readonly T[]): T[] {
+  const next = [...items];
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(Math.random() * (index + 1));
+    const current = next[index]!;
+    next[index] = next[swap]!;
+    next[swap] = current;
+  }
+  return next;
+}
+
+/** Index of the cover that sits in the marker. Stays away from either end so neighbors stay visible. */
+export function idleFocusIndex(length: number): number {
+  if (length <= 1) return 0;
+  const start = Math.min(2, length - 1);
+  const end = Math.max(start, length - 3);
+  return start + Math.floor(Math.random() * (end - start + 1));
+}
+
 export function buildStrip(pool: SteamGame[], winner: SteamGame): SteamGame[] {
   if (pool.length === 0) return [];
   const strip: SteamGame[] = [];
-  for (let index = 0; index < STRIP_LENGTH; index += 1) {
-    strip.push(pool[index % pool.length]!);
+  let previous: SteamGame | null = null;
+  while (strip.length < STRIP_LENGTH) {
+    for (const game of shuffleGames(pool)) {
+      if (strip.length >= STRIP_LENGTH) break;
+      if (previous && game.appId === previous.appId && pool.length > 1) continue;
+      strip.push(game);
+      previous = game;
+    }
+    if (pool.length === 1) {
+      while (strip.length < STRIP_LENGTH) strip.push(pool[0]!);
+      break;
+    }
   }
   strip[WIN_INDEX] = winner;
   if (pool.length > 1) {

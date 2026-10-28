@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { RollRecord, SteamGame } from './data/mock';
+import { shuffleGames } from './draw';
 
 export function isDesktop(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -165,15 +166,37 @@ async function searchPage(start: number, freeOnly: boolean, maxPriceUsd: number 
   });
 }
 
+/** Last storefront page shown at rest, so the next visit can pick another one. */
+let lastPreviewStart = -1;
+
 export async function previewStorefront(input: {
   freeOnly: boolean;
   maxPriceUsd: number | null;
 }): Promise<{ games: SteamGame[]; totalCount: number } | null> {
   try {
-    const page = await searchPage(0, input.freeOnly, input.maxPriceUsd);
+    const first = await searchPage(0, input.freeOnly, input.maxPriceUsd);
+    const pages = Math.max(1, Math.ceil(first.totalCount / PAGE));
+    let pageIndex = Math.floor(Math.random() * pages);
+    if (pages > 1 && pageIndex * PAGE === lastPreviewStart) {
+      pageIndex = (pageIndex + 1 + Math.floor(Math.random() * (pages - 1))) % pages;
+    }
+    const start = pageIndex * PAGE;
+    lastPreviewStart = start;
+    let page = first;
+    if (start !== 0) {
+      try {
+        page = await searchPage(start, input.freeOnly, input.maxPriceUsd);
+      } catch {
+        page = first;
+        lastPreviewStart = 0;
+      }
+    }
+    const games = shuffleGames(
+      page.hits.filter((hit) => hitPriceOk(hit, input.freeOnly, input.maxPriceUsd)).map(hitToGame),
+    );
     return {
-      games: page.hits.filter((hit) => hitPriceOk(hit, input.freeOnly, input.maxPriceUsd)).map(hitToGame),
-      totalCount: page.totalCount,
+      games,
+      totalCount: page.totalCount || first.totalCount,
     };
   } catch {
     return null;
