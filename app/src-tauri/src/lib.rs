@@ -416,7 +416,9 @@ pub fn run() {
             let conn = open_db(&path)?;
             app.manage(Db(Mutex::new(conn)));
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_fullscreen(true);
+                // Maximized keeps the system title bar: minimize, restore, and close.
+                let _ = window.set_fullscreen(false);
+                let _ = window.set_maximized(true);
             }
             Ok(())
         })

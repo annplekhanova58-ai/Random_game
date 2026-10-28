@@ -1,8 +1,8 @@
 import type { RollRecord, SteamGame } from './data/mock';
 
-export const CARD_W = 168;
-export const CARD_H = 78;
-export const CARD_GAP = 12;
+export const CARD_W = 220;
+export const CARD_H = 103;
+export const CARD_GAP = 16;
 export const CARD_STEP = CARD_W + CARD_GAP;
 export const WIN_INDEX = 18;
 /** Cover that is already in the marker when the spin begins. Far from the winner so the strip can travel. */

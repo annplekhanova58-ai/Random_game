@@ -325,7 +325,8 @@ export function RoulettePage() {
   const visibleCount = isDesktop() ? poolCount : prototypeCount;
 
   return (
-    <div data-fixed-winner={fixed ? '665740' : undefined}>
+    <div className="flex min-h-0 flex-1 flex-col" data-fixed-winner={fixed ? '665740' : undefined}>
+      <div className="mx-auto w-full max-w-3xl">
       <h1 className="text-2xl font-semibold text-white">{t(lang, 'roulette')}</h1>
       <p className="mt-1 text-sm text-[#8f98a0]">{t(lang, 'rouletteLead')}</p>
 
@@ -422,19 +423,22 @@ export function RoulettePage() {
           </button>
         </div>
       ) : null}
+      </div>
 
-      <div className="relative mt-6">
-        <div className="pointer-events-none absolute top-0 left-1/2 z-30 -translate-x-1/2 -translate-y-px">
+      <div className="flex flex-1 flex-col justify-center">
+      <div className="relative mt-6 -mx-6">
+        <div className="pointer-events-none absolute top-0 left-1/2 z-30 -translate-x-1/2">
           <div className="h-0 w-0 border-x-8 border-t-8 border-x-transparent border-t-[#a4d007]" />
         </div>
         <div
           ref={viewportRef}
-          className="relative h-[108px] overflow-hidden rounded-lg border border-[#2a475e] bg-[#0b1016]"
-          style={{ transform: 'translateZ(0)' }}
+          className="relative overflow-hidden border-y border-[#2a475e] bg-[#0b1016]"
+          style={{ height: CARD_H + 36, transform: 'translateZ(0)' }}
         >
           <div
             data-marker
-            className="pointer-events-none absolute top-1/2 left-1/2 z-20 h-[78px] w-[168px] -translate-x-1/2 -translate-y-1/2 rounded ring-2 ring-[#a4d007]"
+            className="pointer-events-none absolute top-1/2 left-1/2 z-20 -translate-x-1/2 -translate-y-1/2 rounded ring-2 ring-[#a4d007]"
+            style={{ width: CARD_W, height: CARD_H }}
           />
           <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-16 bg-gradient-to-r from-[#0b1016] to-transparent" />
           <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-[#0b1016] to-transparent" />
@@ -478,6 +482,7 @@ export function RoulettePage() {
           </>
         ) : null}
       </p>
+      </div>
 
       {isDesktop() ? null : (
       <div className="mt-2 flex items-center justify-between gap-3 rounded border border-dashed border-[#4f6b84] bg-[#121a24] px-3 py-2">

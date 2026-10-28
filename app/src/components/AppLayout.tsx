@@ -7,18 +7,10 @@ export function AppLayout() {
   const { pathname } = useLocation();
 
   return (
-    <div className="min-h-screen bg-[#0e1419] px-4 py-6 text-[#c7d5e0]">
-      <div className="mx-auto flex min-h-[680px] w-full max-w-[1180px] flex-col overflow-hidden rounded-lg border border-[#2a475e] bg-[#1b2838] shadow-2xl">
-        <div className="grid h-9 grid-cols-[4.5rem_1fr_4.5rem] items-center bg-[#171a21] px-3">
-          <div className="flex gap-1.5" aria-hidden="true">
-            <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
-            <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
-            <span className="h-3 w-3 rounded-full bg-[#28c840]" />
-          </div>
-          <div className="truncate text-center text-xs text-[#8f98a0]">{t(lang, 'productName')}</div>
-        </div>
+    <div className="flex min-h-screen flex-col bg-[#1b2838] text-[#c7d5e0]">
+      <div className="flex min-h-screen w-full flex-col">
         <div className="h-0.5 bg-gradient-to-r from-[#1b2838] via-[#66c0f4] to-[#5c7e10]" />
-        <header className="flex items-center gap-4 border-b border-[#2a475e] bg-[#171a21] px-5 py-3">
+        <header className="flex items-center gap-4 border-b border-[#2a475e] bg-[#171a21] px-6 py-3">
           <div className="truncate text-lg font-semibold tracking-tight text-white">
             {t(lang, 'productName')}
           </div>
@@ -54,7 +46,7 @@ export function AppLayout() {
             </button>
           </div>
         </header>
-        <main className="min-w-0 flex-1 px-6 py-5">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col px-6 py-5">
           <Outlet />
         </main>
       </div>
