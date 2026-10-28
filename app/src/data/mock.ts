@@ -192,7 +192,7 @@ export const catalog: SteamGame[] = seeds.map(({ accent, ...seed }) => ({
 }));
 
 export function steamUrl(appId: number): string {
-  return `https://store.steampowered.com/app/${appId}`;
+  return `https://store.steampowered.com/app/${appId}?l=russian`;
 }
 
 export function snapshotRoll(game: SteamGame, id: string, rolledAt: string): RollRecord {

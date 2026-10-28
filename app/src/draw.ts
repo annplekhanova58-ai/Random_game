@@ -5,6 +5,8 @@ export const CARD_H = 78;
 export const CARD_GAP = 12;
 export const CARD_STEP = CARD_W + CARD_GAP;
 export const WIN_INDEX = 18;
+/** Cover that is already in the marker when the spin begins. Far from the winner so the strip can travel. */
+export const START_INDEX = 3;
 export const STRIP_LENGTH = 28;
 
 /** Comma and dot are both decimal separators. Empty, negative, and junk return null. */
@@ -66,7 +68,7 @@ export function idleFocusIndex(length: number): number {
   return start + Math.floor(Math.random() * (end - start + 1));
 }
 
-export function buildStrip(pool: SteamGame[], winner: SteamGame): SteamGame[] {
+export function buildStrip(pool: SteamGame[], winner: SteamGame, start?: SteamGame | null): SteamGame[] {
   if (pool.length === 0) return [];
   const strip: SteamGame[] = [];
   let previous: SteamGame | null = null;
@@ -89,6 +91,9 @@ export function buildStrip(pool: SteamGame[], winner: SteamGame): SteamGame[] {
     const after = strip[WIN_INDEX + 1];
     if (before && before.appId === winner.appId) strip[WIN_INDEX - 1] = other;
     if (after && after.appId === winner.appId) strip[WIN_INDEX + 1] = other;
+  }
+  if (start && START_INDEX < strip.length) {
+    strip[START_INDEX] = start;
   }
   return strip;
 }

@@ -10,6 +10,7 @@ import {
   CARD_GAP,
   CARD_H,
   CARD_W,
+  START_INDEX,
   WIN_INDEX,
   buildStrip,
   cardOffset,
@@ -187,27 +188,36 @@ export function RoulettePage() {
     }, 800);
   }
 
-  async function startSpin(pool: SteamGame[], winner: SteamGame, existing?: RollRecord) {
-    const next = buildStrip(pool, winner);
+  function focusedCover(): SteamGame | null {
+    const games = isDesktop() ? preview : resting;
+    if (games.length === 0) return null;
+    const index = Math.min(Math.max(idleIndexRef.current, 0), games.length - 1);
+    return games[index] ?? null;
+  }
+
+  async function startSpin(pool: SteamGame[], winner: SteamGame, existing?: RollRecord, start?: SteamGame | null) {
+    const next = buildStrip(pool, winner, start);
     commitRoll(existing ?? createRoll(winner));
     doneRef.current = false;
     setSpinning(true);
     await preloadCovers(next.map((game) => game.cover));
     if (!mountedRef.current) return;
+    const measured = viewportRef.current?.clientWidth ?? 0;
+    const width = measured > 0 ? measured : 640;
     flushSync(() => {
       setStrip(next);
       setAnimate(false);
-      setOffset(0);
+      setOffset(start ? cardOffset(START_INDEX, width) : 0);
       setPhaseBoth('spinning');
     });
     viewportRef.current?.getBoundingClientRect();
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         if (!mountedRef.current) return;
-        const measured = viewportRef.current?.clientWidth ?? 0;
-        const width = measured > 0 ? measured : 640;
+        const again = viewportRef.current?.clientWidth ?? 0;
+        const landWidth = again > 0 ? again : width;
         setAnimate(true);
-        setOffset(landOffset(width));
+        setOffset(landOffset(landWidth));
         if (backupRef.current != null) window.clearTimeout(backupRef.current);
         backupRef.current = window.setTimeout(() => {
           if (phaseRef.current === 'spinning') finishSpin();
@@ -219,6 +229,7 @@ export function RoulettePage() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (spinning || phaseRef.current === 'spinning' || !ready) return;
+    const startGame = focusedCover();
 
     if (isDesktop()) {
       if (!freeOnly) {
@@ -239,7 +250,7 @@ export function RoulettePage() {
       if (fixed) {
         const outcome = await drawFixedWinner(preview);
         if (!mountedRef.current) return;
-        void startSpin(outcome.strip, outcome.winner, outcome.roll);
+        void startSpin(outcome.strip, outcome.winner, outcome.roll, startGame);
         return;
       }
       const outcome = await drawFromSteam({
@@ -258,7 +269,7 @@ export function RoulettePage() {
         setSpinning(false);
         return;
       }
-      void startSpin(outcome.strip, outcome.winner, outcome.roll);
+      void startSpin(outcome.strip, outcome.winner, outcome.roll, startGame);
       return;
     }
 
@@ -283,7 +294,7 @@ export function RoulettePage() {
       setSteamError(false);
       const outcome = await drawFixedWinner(pool.length > 0 ? pool : catalog);
       if (!mountedRef.current) return;
-      void startSpin(outcome.strip, outcome.winner, outcome.roll);
+      void startSpin(outcome.strip, outcome.winner, outcome.roll, startGame);
       return;
     }
 
@@ -299,7 +310,7 @@ export function RoulettePage() {
       setEmptyCatalog(true);
       return;
     }
-    void startSpin(pool, winner);
+    void startSpin(pool, winner, undefined, startGame);
   }
 
   const prototypeCount = useMemo(() => {
@@ -447,6 +458,8 @@ export function RoulettePage() {
                 className="shrink-0 overflow-hidden rounded"
                 style={{ width: CARD_W, height: CARD_H, marginRight: CARD_GAP, contain: 'strict' }}
                 data-name={game.name}
+                data-focus={phase === 'idle' && index === Math.min(idleIndexRef.current, shown.length - 1) ? 'true' : undefined}
+                data-start={phase !== 'idle' && index === START_INDEX ? 'true' : undefined}
                 data-landing={phase !== 'idle' && index === WIN_INDEX ? 'true' : undefined}
               >
                 <GameCover game={game} alt="" className="h-full w-full object-cover" decoding="sync" loading="eager" />

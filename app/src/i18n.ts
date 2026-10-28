@@ -109,8 +109,10 @@ export function formatWhen(iso: string, lang: Lang): string {
   });
 }
 
-export function localizedNote(noteRu: string, noteEn: string, lang: Lang): string {
-  return lang === 'en' ? noteEn : noteRu;
+/** Game text stays Russian in both interface languages. */
+export function localizedNote(noteRu: string, noteEn: string, _lang: Lang): string {
+  const russian = noteRu.trim();
+  return russian.length > 0 ? noteRu : noteEn;
 }
 
 export function formatPoolCount(count: number, lang: Lang): string {

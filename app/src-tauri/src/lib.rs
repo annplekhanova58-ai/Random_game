@@ -202,7 +202,7 @@ fn parse_hits(html: &str) -> Vec<SearchHit> {
 
 fn search_url(start: u32, count: u32, free_only: bool, max_price_usd: Option<f64>) -> String {
     let mut url = format!(
-        "https://store.steampowered.com/search/results/?json=1&infinite=1&ignore_preferences=1&category1=998&cc=US&start={start}&count={count}"
+        "https://store.steampowered.com/search/results/?json=1&infinite=1&ignore_preferences=1&category1=998&cc=US&l=russian&start={start}&count={count}"
     );
     if free_only {
         url.push_str("&maxprice=free");
@@ -226,7 +226,7 @@ async fn get_json(url: String) -> Result<Value, String> {
         .map_err(|err| err.to_string())?;
     let response = client
         .get(url)
-        .header("Accept-Language", "en-US,en;q=0.9")
+        .header("Accept-Language", "ru-RU,ru;q=0.9,en;q=0.5")
         .send()
         .await
         .map_err(|err| err.to_string())?;
@@ -355,7 +355,7 @@ async fn steam_search(start: u32, count: u32, free_only: bool, max_price_usd: Op
 }
 
 fn steam_store_url(app_id: u32) -> String {
-    format!("https://store.steampowered.com/app/{app_id}")
+    format!("https://store.steampowered.com/app/{app_id}?l=russian")
 }
 
 /// Opens the store page in the system browser. The window's webview ignores `target=_blank`.
@@ -369,7 +369,7 @@ fn open_steam(app_id: u32) -> Result<(), String> {
 
 #[tauri::command]
 async fn steam_details(app_id: u32) -> Result<Option<AppDetails>, String> {
-    let url = format!("https://store.steampowered.com/api/appdetails?appids={app_id}&cc=US");
+    let url = format!("https://store.steampowered.com/api/appdetails?appids={app_id}&cc=US&l=russian");
     let body = get_json(url).await?;
     let node = body.get(app_id.to_string()).cloned().unwrap_or(Value::Null);
     if node.get("success").and_then(|value| value.as_bool()) != Some(true) {
@@ -415,6 +415,9 @@ pub fn run() {
             let path = db_path(app)?;
             let conn = open_db(&path)?;
             app.manage(Db(Mutex::new(conn)));
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_fullscreen(true);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -469,7 +472,10 @@ mod tests {
 
     #[test]
     fn steam_link_stays_on_the_store_page() {
-        assert_eq!(steam_store_url(730), "https://store.steampowered.com/app/730");
+        assert_eq!(
+            steam_store_url(730),
+            "https://store.steampowered.com/app/730?l=russian"
+        );
     }
 
     #[test]
@@ -480,5 +486,7 @@ mod tests {
         let paid = search_url(25, 25, false, Some(19.2));
         assert!(paid.contains("maxprice=20"));
         assert!(paid.contains("start=25"));
+        assert!(paid.contains("cc=US"));
+        assert!(paid.contains("l=russian"));
     }
 }

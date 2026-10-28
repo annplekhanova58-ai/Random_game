@@ -16,7 +16,8 @@
         "title": "Случайная игра Steam",
         "width": 1100,
         "height": 760,
-        "resizable": true
+        "resizable": true,
+        "fullscreen": true
       }
     ],
     "security": {
