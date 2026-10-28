@@ -1,0 +1,193 @@
+# Собирает NSIS-установщик Random Steam Game на Windows и публикует его
+# в GitHub Release под стабильным именем Random-Steam-Game-Setup.exe.
+# Локальный аналог на Windows: npm run desktop:build:windows:native (каталог app).
+# На Linux та же упаковка вызывается через npm run desktop:build:windows (cargo-xwin).
+
+name: Windows installer
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-installer-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish NSIS installer
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Read app version
+        id: meta
+        run: |
+          set -euo pipefail
+          tauri_version="$(node -p "require('./app/src-tauri/tauri.conf.json').version")"
+          pkg_version="$(node -p "require('./app/package.json').version")"
+          if [[ ! "$tauri_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Unexpected version in tauri.conf.json: ${tauri_version}" >&2
+            exit 1
+          fi
+          if [ "$tauri_version" != "$pkg_version" ]; then
+            echo "Version mismatch: tauri.conf.json=${tauri_version} package.json=${pkg_version}" >&2
+            exit 1
+          fi
+          echo "version=${tauri_version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${tauri_version}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "App version ${tauri_version}, release tag v${tauri_version}-${GITHUB_RUN_NUMBER}"
+
+      - name: Build NSIS installer
+        working-directory: app
+        run: npm run desktop:build:windows:native
+
+      - name: Stage stable installer name
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $dir = Join-Path $env:GITHUB_WORKSPACE "app/src-tauri/target/release/bundle/nsis"
+          $found = @(Get-ChildItem -LiteralPath $dir -Filter "*-setup.exe" -File)
+          if ($found.Count -ne 1) {
+            $names = ($found | ForEach-Object { $_.Name }) -join ", "
+            throw "Expected exactly one NSIS *-setup.exe in $dir, found $($found.Count): $names"
+          }
+          $dest = Join-Path $env:GITHUB_WORKSPACE "Random-Steam-Game-Setup.exe"
+          Copy-Item -LiteralPath $found[0].FullName -Destination $dest -Force
+          $bytes = [System.IO.File]::ReadAllBytes($dest)
+          if ($bytes.Length -lt 1000000) {
+            throw "Installer is unexpectedly small ($($bytes.Length) bytes)"
+          }
+          if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
+            throw "Installer is not a PE executable"
+          }
+          $ascii = [System.Text.Encoding]::ASCII.GetString($bytes)
+          if ($ascii -notmatch "Nullsoft") {
+            throw "Installer is not a Nullsoft (NSIS) executable"
+          }
+          $utf16 = [System.Text.Encoding]::Unicode.GetString($bytes)
+          if ($utf16 -notlike "*Random Steam Game*") {
+            throw "Product name Random Steam Game is missing from the installer"
+          }
+          Write-Host "Staged $($found[0].Name) -> Random-Steam-Game-Setup.exe ($($bytes.Length) bytes)"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          notes="$RUNNER_TEMP/release-notes.md"
+          {
+            printf '%s\n' "Установщик **Random Steam Game ${VERSION}** (сборка ${GITHUB_RUN_NUMBER})."
+            printf '\n'
+            printf '%s\n' "Тихая установка для текущего пользователя:"
+            printf '\n'
+            printf '%s\n' '```'
+            printf '%s\n' "Random-Steam-Game-Setup.exe /S"
+            printf '%s\n' '```'
+            printf '\n'
+            printf '%s\n' "Программа устанавливается в:"
+            printf '\n'
+            printf '%s\n' '```'
+            printf '%s\n' '%LOCALAPPDATA%\Random Steam Game\random-steam-game.exe'
+            printf '%s\n' '```'
+            printf '\n'
+            printf '%s\n' "Тихое удаление:"
+            printf '\n'
+            printf '%s\n' '```'
+            printf '%s\n' '"%LOCALAPPDATA%\Random Steam Game\uninstall.exe" /S'
+            printf '%s\n' '```'
+            printf '\n'
+            printf '%s\n' "Стабильная ссылка на последний установщик:"
+            printf '\n'
+            printf '%s\n' "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/Random-Steam-Game-Setup.exe"
+          } > "$notes"
+
+          title="Random Steam Game ${VERSION} (build ${GITHUB_RUN_NUMBER})"
+          explain_permissions() {
+            echo "Создание Release требует GITHUB_TOKEN с правом contents: write." >&2
+            echo "Владелец: Settings → Actions → General → Workflow permissions → Read and write permissions." >&2
+            echo "Если политику задаёт организация, разрешение на запись выдаёт её администратор." >&2
+          }
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            if ! gh release upload "$TAG" Random-Steam-Game-Setup.exe --clobber; then
+              explain_permissions
+              exit 1
+            fi
+            if ! gh release edit "$TAG" \
+              --draft=false \
+              --latest \
+              --prerelease=false \
+              --target "$GITHUB_SHA" \
+              --title "$title" \
+              --notes-file "$notes"; then
+              explain_permissions
+              exit 1
+            fi
+          else
+            if ! gh release create "$TAG" Random-Steam-Game-Setup.exe \
+              --target "$GITHUB_SHA" \
+              --title "$title" \
+              --latest \
+              --notes-file "$notes"; then
+              explain_permissions
+              exit 1
+            fi
+          fi
+
+          expected="Random-Steam-Game-Setup.exe"
+          for attempt in 1 2 3 4 5 6; do
+            if tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name 2>/dev/null)"; then
+              asset="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq ".assets[].name" 2>/dev/null | grep -x "$expected" || true)"
+              if [ "$tag" = "$TAG" ] && [ "$asset" = "$expected" ]; then
+                url="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/${expected}"
+                echo "Latest release ${tag} includes ${expected}"
+                echo "Download: ${url}"
+                {
+                  echo "### Windows installer"
+                  echo
+                  echo "$url"
+                } >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+              echo "Attempt ${attempt}: latest=${tag:-<none>} asset=${asset:-<missing>}"
+            else
+              echo "Attempt ${attempt}: latest release is not available yet"
+            fi
+            sleep 5
+          done
+          echo "Latest release did not point at ${TAG} with ${expected}" >&2
+          exit 1
